@@ -43,7 +43,7 @@ def run_test( user, password, rhost, openapi ):
     print( "Opening {}...".format( openapi ) )
     try:
         with open( openapi ) as openapi_file:
-            openapi_data = yaml.load( openapi_file )
+            openapi_data = yaml.load(openapi_file, Loader=yaml.FullLoader)
     except:
         print( "ERROR: Could not open {}".format( openapi ) )
         return None
@@ -60,8 +60,9 @@ def run_test( user, password, rhost, openapi ):
     if os.path.isdir( cachedir ):
         RMCOBJ.logout
 
-    # Login into the server and create a session
-    print( "Logging in to {}...".format( rhost ) )
+    # Login into the server, create a session, and download all resources
+    print("Service URI: {}".format(rhost))
+    print("Logging in and downloading resources; this may take a while...")
     try:
         RMCOBJ.login( base_url = rhost, username = user, password = password )
     except:
