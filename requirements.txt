@@ -1,2 +1,2 @@
 redfish
-pyyaml
+pyyaml>=5.1
