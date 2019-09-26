@@ -43,7 +43,7 @@ def run_test( user, password, rhost, openapi ):
     print( "Opening {}...".format( openapi ) )
     try:
         with open( openapi ) as openapi_file:
-            openapi_data = yaml.load(openapi_file, Loader=yaml.FullLoader)
+            openapi_data = yaml.load( openapi_file, Loader = yaml.FullLoader )
     except:
         print( "ERROR: Could not open {}".format( openapi ) )
         return None
@@ -61,8 +61,8 @@ def run_test( user, password, rhost, openapi ):
         RMCOBJ.logout
 
     # Login into the server, create a session, and download all resources
-    print("Service URI: {}".format(rhost))
-    print("Logging in and downloading resources; this may take a while...")
+    print( "Service URI: {}".format( rhost ) )
+    print( "Logging in and downloading resources; this may take a while..." )
     try:
         RMCOBJ.login( base_url = rhost, username = user, password = password )
     except:
@@ -70,7 +70,7 @@ def run_test( user, password, rhost, openapi ):
         return None
 
     # Get all resources
-    RMCOBJ.select(['"*"'])
+    RMCOBJ.select( [ '"*"' ] )
     response = RMCOBJ.get()
 
     # Go through each response and check the @odata.type and @odata.id properties against the OpenAPI file
@@ -82,61 +82,139 @@ def run_test( user, password, rhost, openapi ):
     results["TotalFail"] = 0
     results["TotalWarn"] = 0
     for item in response:
-        try:
-            serv_file = item["@odata.type"].rsplit( "." )[0][1:]
-            serv_type = item["@odata.type"].rsplit( "." )[-1]
-            serv_uri = item["@odata.id"]
-        except:
+        serv_uri = item.get( "@odata.id", None )
+        if serv_uri is None:
             results["Orphans"].append( item )
             results["TotalFail"] = results["TotalFail"] + 1
             continue
 
         # Go through each path object in the OpenAPI specification to find a match
-        type_found = False
         path_match = False
+        skip_test = False
+        oem_resource = False
         for uri in openapi_data["paths"]:
-            # Pull the type from the reference
-            try:
-                ref = openapi_data["paths"][uri]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
-                file = re.search( "([\\w\\d]+)(\\.v\\d+_\\d+_\\d+)?\\.yaml", ref ).group( 1 )
-                type = ref.rsplit( "/" )[-1]
-            except:
-                # If we get here, then the path should be describing an action; ignore and move on
-                continue
-
-            # Check if the type found via the reference matches the @odata.type property
-            if serv_file == file and serv_type == type:
-                type_found = True
-
-                # Check if the pattern in the path object matches the @odata.id property
-                uri_pattern = "^" + re.sub( "{[A-Za-z0-9]+}", "[^/]+", uri ) + "$"
-                if re.match( uri_pattern, serv_uri ) != None:
-                    path_match = True
-
-            if path_match:
+            # Check if the pattern in the path object matches the @odata.id property
+            uri_pattern = "^" + re.sub( "{[A-Za-z0-9]+}", "[^/]+", uri ) + "$"
+            if re.match( uri_pattern, serv_uri ) is not None:
+                path_match = True
                 # Break out early since we got a match
                 break
 
+        # If no match, find where the resource is linked to see if this is an exception case
+        if not path_match:
+            ref_path = build_reference_path( serv_uri, response, [] )
+
+            # Check if the resource is one of the special resources not listed in the OpenAPI document
+            skip_list = [ "@Redfish.Settings", "@Redfish.ActionInfo", "@Redfish.CollectionCapabilities" ]
+            for skip_prop in skip_list:
+                if skip_prop in ref_path:
+                    skip_test = True
+            if skip_test:
+                continue
+
+            # Check if the resource is OEM
+            if "Oem" in ref_path:
+                oem_resource = True
+
         # Log if a match was not found
         results["URIs"][serv_uri] = {}
-        if type_found:
-            if path_match:
-                results["URIs"][serv_uri]["Result"] = "Pass"
-                results["URIs"][serv_uri]["Details"] = "Pass"
-                results["TotalPass"] = results["TotalPass"] + 1
-            else:
-                results["URIs"][serv_uri]["Result"] = "Fail"
-                results["URIs"][serv_uri]["Details"] = "'{}' for type '{}' from file '{}' was not found in the OpenAPI specification".format( serv_uri, serv_type, serv_file )
-                results["TotalFail"] = results["TotalFail"] + 1
-        else:
+        if path_match:
+            results["URIs"][serv_uri]["Result"] = "Pass"
+            results["URIs"][serv_uri]["Details"] = "Pass"
+            results["TotalPass"] = results["TotalPass"] + 1
+        elif oem_resource:
             results["URIs"][serv_uri]["Result"] = "Warning"
-            results["URIs"][serv_uri]["Details"] = "Type '{}' from file '{}' was not found in the OpenAPI specification".format( serv_type, serv_file )
+            results["URIs"][serv_uri]["Details"] = "OEM resource '{}' was not found in the OpenAPI specification".format( serv_uri )
             results["TotalWarn"] = results["TotalWarn"] + 1
+        else:
+            results["URIs"][serv_uri]["Result"] = "Fail"
+            results["URIs"][serv_uri]["Details"] = "Resource '{}' was not found in the OpenAPI specification".format( serv_uri )
+            results["TotalFail"] = results["TotalFail"] + 1
 
     # Logout of the current session
     RMCOBJ.logout()
 
     return results
+
+def build_reference_path( uri, response, path ):
+    """
+    Finds the property path that leads to a specified URI
+
+    Args:
+        uri: The URI to build
+        response: The resources from the service
+        path: An array of strings containing the current path discovered
+
+    Returns:
+        An updated array of strings showing the property path to the resource
+    """
+
+    # Check if we're back to Service Root; the list is done now
+    if uri == "/redfish/v1/" or uri == "/redfish/v1":
+        return path
+
+    # Go through each resource
+    for resource in response:
+        resource_uri = resource.get( "@odata.id", None )
+
+        # Skip the current resource if it's broken or the desired resource to check
+        if resource_uri is None or uri == resource_uri:
+            continue
+
+        # Scan the resource and its nested objects for a match
+        partial_path = []
+        if scan_object( uri, resource, partial_path ):
+            # Match; add the partial path and go up a level for scanning
+            return build_reference_path( resource_uri, response, partial_path + path )
+
+    # Shouldn't ever get here if the resource tree is constructed properly
+    return path
+
+def scan_object( uri, resource, partial_path ):
+    """
+    Scans an object for a matching URI
+
+    Args:
+        uri: The URI to find
+        resource: The object to scan
+        partial_path: An array of strings containing the path discovered for the current resource
+
+    Returns:
+        True if there's a match; False otherwise
+    """
+
+    # Scan the current object
+    for property, value in resource.items():
+        # If there is an @odata.id property and it matches the URI, we're done
+        if property == "@odata.id":
+            if value == uri:
+                return True
+
+        # Skip properties known to not contain subordinate resources
+        skipped_properties = [ "Links", "PoweredBy", "CooledBy", "RelatedItem", "OriginOfCondition", "MaintenanceWindowResource", "RedundancySet", "OriginResources" ]
+        if property in skipped_properties:
+            continue
+
+        # If the property is an object, check if it's a match
+        if type( value ) is dict:
+            partial_path.append( property )
+            if scan_object( uri, value, partial_path ):
+                return True
+            # No match; keep going
+            del partial_path[-1]
+
+        # If the property is an array, check if it contains objects and if there is a match within the object
+        if type( value ) is list:
+            partial_path.append( property )
+            for array_value in value:
+                if type( array_value ) is dict:
+                    if scan_object( uri, array_value, partial_path ):
+                        return True
+            # No match; keep going
+            del partial_path[-1]
+
+    # No matches
+    return False
 
 def generate_report( results, user, password, rhost, openapi ):
     """
@@ -262,7 +340,7 @@ if __name__ == '__main__':
 
     # Run the test
     results = run_test( args.user, args.password, args.rhost, args.openapi )
-    if results == None:
+    if results is None:
         sys.exit( 1 )
     else:
         # Generate the report
