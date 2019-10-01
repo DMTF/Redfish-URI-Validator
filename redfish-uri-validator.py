@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sys
+import traceback
 import yaml
 
 from redfish.ris import RmcApp
@@ -46,6 +47,7 @@ def run_test( user, password, rhost, openapi ):
             openapi_data = yaml.load( openapi_file, Loader = yaml.FullLoader )
     except:
         print( "ERROR: Could not open {}".format( openapi ) )
+        print( traceback.format_exc() )
         return None
 
     # Creating RMC object
@@ -58,7 +60,7 @@ def run_test( user, password, rhost, openapi ):
 
     # If current cache exist try to log it out
     if os.path.isdir( cachedir ):
-        RMCOBJ.logout
+        RMCOBJ.logout()
 
     # Login into the server, create a session, and download all resources
     print( "Service URI: {}".format( rhost ) )
@@ -67,6 +69,7 @@ def run_test( user, password, rhost, openapi ):
         RMCOBJ.login( base_url = rhost, username = user, password = password )
     except:
         print( "ERROR: Could not log into {} with credentials '{}':'{}'".format( rhost, user, password ) )
+        print( traceback.format_exc() )
         return None
 
     # Get all resources
@@ -74,7 +77,7 @@ def run_test( user, password, rhost, openapi ):
     response = RMCOBJ.get()
 
     # Go through each response and check the @odata.type and @odata.id properties against the OpenAPI file
-    print( "Generating results..." );
+    print( "Generating results..." )
     results = {}
     results["URIs"] = {}
     results["Orphans"] = []
