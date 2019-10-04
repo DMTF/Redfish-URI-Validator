@@ -56,3 +56,10 @@ required arguments:
 optional arguments:
   -h, --help            show this help message and exit
 ```
+
+## Release Process
+
+1. Update `CHANGELOG.md` with the list of changes since the last release
+2. Update the `tool_version` variable in `redfish-uri-validator.py` to reflect the new tool version
+3. Push changes to Github
+4. Create a new release in Github
