@@ -219,7 +219,7 @@ def scan_object( uri, resource, partial_path ):
     # No matches
     return False
 
-def generate_report( results, user, password, rhost, openapi ):
+def generate_report( results, user, password, rhost, openapi, logdir ):
     """
     Creates an HTML report
 
@@ -229,6 +229,7 @@ def generate_report( results, user, password, rhost, openapi ):
         password: The password to use for the service
         rhost: The host to use for the service
         openapi: The file name of the OpenAPI specification to use
+        logdir: The output log directory
     """
 
     # The string template for the report
@@ -326,6 +327,10 @@ def generate_report( results, user, password, rhost, openapi ):
 
     current_time = datetime.now()
     log_file = datetime.strftime( current_time, "RedfishURITestReport_%m_%d_%Y_%H%M%S.html" )
+    if logdir is not None:
+        if not os.path.isdir( logdir ):
+            os.makedirs( logdir )
+        log_file = logdir + os.path.sep + log_file
     print( "Generating {}...". format( log_file ) )
     with open( log_file, "w", encoding = "utf-8") as out_file:
         out_file.write( html_string.format( RedfishLogo.logo, tool_version, current_time.strftime( "%c" ),
@@ -339,6 +344,7 @@ if __name__ == '__main__':
     argget.add_argument( "--password", "-p",  type = str, required = True, help = "The password for authentication" )
     argget.add_argument( "--rhost", "-r", type = str, required = True, help = "The address of the Redfish service (with address prefix)" )
     argget.add_argument( "--openapi", "-o", type = str, required = True, help = "The OpenAPI spec to use for validation" )
+    argget.add_argument( "--logdir", "-d", type = str, default = None, help = "Output directory for logs" )
     args = argget.parse_args()
 
     # Run the test
@@ -347,5 +353,5 @@ if __name__ == '__main__':
         sys.exit( 1 )
     else:
         # Generate the report
-        generate_report( results, args.user, args.password, args.rhost, args.openapi )
+        generate_report( results, args.user, args.password, args.rhost, args.openapi, args.logdir )
         sys.exit( 0 )

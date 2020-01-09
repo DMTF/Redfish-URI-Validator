@@ -31,7 +31,7 @@ The tool will log into the service specified by the *rhost* argument using the c
     * The type specified by the `@odata.type` is found in the OpenAPI specification, but the `@odata.id` property does not match any of the patterns specified by the OpenAPI specification
     * The resource is missing the `@odata.id` property and/or the `@odata.type` property
 
-An HTML report is constructed and saved in the same directory as the tool.
+An HTML report is constructed and saved in the same directory as the tool, or the directory specified by the *logdir* argument.
 
 
 ## Options
@@ -55,6 +55,9 @@ required arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
+  --logdir LOGDIR, -d LOGDIR
+                        Output directory for logs
+
 ```
 
 ## Release Process
