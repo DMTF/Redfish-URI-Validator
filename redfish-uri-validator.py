@@ -25,7 +25,7 @@ import yaml
 from redfish.ris import RmcApp
 import RedfishLogo
 
-tool_version = "1.0.0"
+tool_version = "1.0.1"
 
 def run_test( user, password, rhost, openapi ):
     """
