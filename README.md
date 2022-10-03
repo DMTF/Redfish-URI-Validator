@@ -2,6 +2,10 @@
 
 Copyright 2018-2019 DMTF. All rights reserved.
 
+## Deprecated
+
+This tool is deprecated in favor of URI checking functionality that has been folded into the the [Redfish-Service-Validator](https://github.com/DMTF/Redfish-Service-Validator).
+
 ## About
 
 The Redfish URI Validator is a Python3 tool which scans all resources on a given service and verifies the URIs on the service match the patterns described in a provided OpenAPI specification.
